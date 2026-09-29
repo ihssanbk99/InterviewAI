@@ -13,20 +13,47 @@ class InterviewCoach implements Agent, HasStructuredOutput
 
     public function instructions(): string
     {
-        return 'You are an AI job interview coach. Evaluate candidate answers professionally. Consider relevance, technical accuracy, clarity, communication, and completeness. Give constructive feedback that helps the candidate improve.';
+        return 'You are an AI job interview evaluator. Evaluate candidate answers professionally and consistently. Score each evaluation criterion independently from 0 to 10. Do not calculate or provide an overall score. Focus only on the quality of the candidate answer based on the interview question, role, and experience level.';
     }
 
     public function schema(JsonSchema $schema): array
     {
         return [
-            'score' => $schema->integer()->min(1)->max(10)->required(),
+            'technical_accuracy' => $schema->integer()
+                ->min(0)
+                ->max(10)
+                ->required(),
+
+            'relevance' => $schema->integer()
+                ->min(0)
+                ->max(10)
+                ->required(),
+
+            'completeness' => $schema->integer()
+                ->min(0)
+                ->max(10)
+                ->required(),
+
+            'clarity_communication' => $schema->integer()
+                ->min(0)
+                ->max(10)
+                ->required(),
+
+            'experience_level_fit' => $schema->integer()
+                ->min(0)
+                ->max(10)
+                ->required(),
+
             'strengths' => $schema->array()
                 ->items($schema->string())
                 ->required(),
+
             'weaknesses' => $schema->array()
                 ->items($schema->string())
                 ->required(),
-            'feedback' => $schema->string()->required(),
+
+            'feedback' => $schema->string()
+                ->required(),
         ];
     }
 
