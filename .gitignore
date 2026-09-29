@@ -1,0 +1,12 @@
+InterviewAI-Backend/.env
+InterviewAI-Backend/.env.*
+!InterviewAI-Backend/.env.example
+
+InterviewAI-Frontend/.env
+InterviewAI-Frontend/.env.*
+
+InterviewAI-Backend/vendor/
+InterviewAI-Frontend/node_modules/
+InterviewAI-Frontend/dist/
+
+.phpunit.result.cache
