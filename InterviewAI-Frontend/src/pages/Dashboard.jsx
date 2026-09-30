@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import { useAuth } from "../context/AuthContext";
@@ -10,7 +10,7 @@ export default function Dashboard() {
     const { user, logout } = useAuth();
     const navigate = useNavigate();
 
-    const [interviews, setInterviews] = useState([]);
+    const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
 
@@ -25,7 +25,7 @@ export default function Dashboard() {
                     },
                 });
 
-                setInterviews(response.data.interviews || []);
+                setSessions(response.data.sessions || []);
             } catch (err) {
                 setError(
                     err.response?.data?.message ||
@@ -39,87 +39,12 @@ export default function Dashboard() {
         fetchInterviews();
     }, []);
 
-    const sessions = useMemo(() => {
-        const groupedSessions = new Map();
-
-        interviews.forEach((interview) => {
-            const sessionId = interview.session_id;
-
-            if (!sessionId) {
-                return;
-            }
-
-            if (!groupedSessions.has(sessionId)) {
-                groupedSessions.set(sessionId, {
-                    session_id: sessionId,
-                    interview_type: interview.interview_type,
-                    level: interview.level,
-                    created_at: interview.created_at,
-                    final_score: null,
-                    questions: 0,
-                    status: "completed",
-                });
-            }
-
-            const session = groupedSessions.get(sessionId);
-
-            session.questions += 1;
-
-            if (
-                new Date(interview.created_at) <
-                new Date(session.created_at)
-            ) {
-                session.created_at = interview.created_at;
-            }
-
-            if (interview.session) {
-                session.status = interview.session.status || "completed";
-                session.final_score = interview.session.final_score;
-            }
-        });
-
-        const sessionList = Array.from(groupedSessions.values());
-
-        sessionList.forEach((session) => {
-            const sessionInterviews = interviews.filter(
-                (interview) =>
-                    Number(interview.session_id) ===
-                    Number(session.session_id)
-            );
-
-            if (session.final_score === null) {
-                const totalScore = sessionInterviews.reduce(
-                    (total, interview) =>
-                        total + Number(interview.score || 0),
-                    0
-                );
-
-                session.final_score =
-                    sessionInterviews.length > 0
-                        ? Number(
-                              (
-                                  totalScore /
-                                  sessionInterviews.length
-                              ).toFixed(2)
-                          )
-                        : 0;
-            }
-        });
-
-        return sessionList.sort(
-            (a, b) =>
-                new Date(b.created_at) -
-                new Date(a.created_at)
-        );
-    }, [interviews]);
-
     const averageScore =
         sessions.length > 0
             ? (
                   sessions.reduce(
                       (total, session) =>
-                          total +
-                          Number(session.final_score || 0),
+                          total + Number(session.final_score || 0),
                       0
                   ) / sessions.length
               ).toFixed(1)
@@ -327,7 +252,7 @@ export default function Dashboard() {
                             {sessions.slice(0, 3).map((session) => (
                                 <article
                                     className="recent-interview-card"
-                                    key={session.session_id}
+                                    key={session.id}
                                 >
                                     <div className="recent-interview-main">
                                         <div className="recent-session">
@@ -336,7 +261,7 @@ export default function Dashboard() {
                                             <strong>
                                                 #
                                                 {String(
-                                                    session.session_id
+                                                    session.id
                                                 ).padStart(2, "0")}
                                             </strong>
                                         </div>
@@ -389,7 +314,7 @@ export default function Dashboard() {
                                                 className="recent-report-button"
                                                 onClick={() =>
                                                     navigate(
-                                                        `/interview-report/${session.session_id}`
+                                                        `/interview-report/${session.id}`
                                                     )
                                                 }
                                             >

@@ -13,12 +13,19 @@ class InterviewController extends Controller
 {
     public function index(Request $request)
     {
-        $interviews = Interview::where('user_id', $request->user()->id)
+        $interviews = Interview::with('session')
+            ->where('user_id', $request->user()->id)
+            ->latest()
+            ->get();
+
+        $sessions = InterviewSession::with('interviews')
+            ->where('user_id', $request->user()->id)
             ->latest()
             ->get();
 
         return response()->json([
             'interviews' => $interviews,
+            'sessions' => $sessions,
         ]);
     }
 
@@ -170,20 +177,11 @@ Also provide concise strengths, weaknesses, and constructive feedback.
 
         $evaluation = $result->structured;
 
-        $technicalAccuracy =
-            (int) $evaluation['technical_accuracy'];
-
-        $relevance =
-            (int) $evaluation['relevance'];
-
-        $completeness =
-            (int) $evaluation['completeness'];
-
-        $clarityCommunication =
-            (int) $evaluation['clarity_communication'];
-
-        $experienceLevelFit =
-            (int) $evaluation['experience_level_fit'];
+        $technicalAccuracy = (int) $evaluation['technical_accuracy'];
+        $relevance = (int) $evaluation['relevance'];
+        $completeness = (int) $evaluation['completeness'];
+        $clarityCommunication = (int) $evaluation['clarity_communication'];
+        $experienceLevelFit = (int) $evaluation['experience_level_fit'];
 
         $weightedScore =
             ($technicalAccuracy * 0.30) +
@@ -290,15 +288,13 @@ Also provide concise strengths, weaknesses, and constructive feedback.
             ]);
         }
 
-        $nextQuestionNumber =
-            $session->current_question + 1;
+        $nextQuestionNumber = $session->current_question + 1;
 
         $session->update([
             'current_question' => $nextQuestionNumber,
         ]);
 
-        $questionAgent =
-            new InterviewQuestionGenerator();
+        $questionAgent = new InterviewQuestionGenerator();
 
         $questionPrompt = "
 Generate interview question number {$nextQuestionNumber} for a {$session->level} candidate applying for a {$session->interview_type} position.
@@ -343,8 +339,7 @@ Return only the interview question through the structured response.
                     'weaknesses' => $interview->weaknesses,
                     'feedback' => $interview->feedback,
                 ],
-                'next_question' =>
-                    $questionResult->structured['question'],
+                'next_question' => $questionResult->structured['question'],
             ],
         ]);
     }

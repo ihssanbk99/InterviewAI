@@ -1,18 +1,19 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import axios from "axios";
 import "./InterviewHistory.css";
 
 const API_URL = "http://127.0.0.1:8000/api";
 
-export default function InterviewHistory() {
-    const [interviews, setInterviews] = useState([]);
+function InterviewHistory() {
+    const [sessions, setSessions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState("");
-    const [selectedInterview, setSelectedInterview] = useState(null);
+
+    const navigate = useNavigate();
 
     useEffect(() => {
-        const fetchInterviews = async () => {
+        const fetchHistory = async () => {
             try {
                 const token = localStorage.getItem("interviewai_token");
 
@@ -22,26 +23,46 @@ export default function InterviewHistory() {
                     },
                 });
 
-                setInterviews(response.data.interviews);
-            } catch (err) {
+                setSessions(response.data.sessions || []);
+            } catch (error) {
                 setError(
-                    err.response?.data?.message ||
-                        "Unable to load interview history."
+                    error.response?.data?.message ||
+                    "Unable to load interview history."
                 );
             } finally {
                 setLoading(false);
             }
         };
 
-        fetchInterviews();
+        fetchHistory();
     }, []);
 
     const formatDate = (date) => {
+        if (!date) {
+            return "N/A";
+        }
+
         return new Date(date).toLocaleDateString("en-US", {
+            year: "numeric",
             month: "short",
             day: "numeric",
-            year: "numeric",
         });
+    };
+
+    const formatStatus = (status) => {
+        if (status === "completed") {
+            return "Completed";
+        }
+
+        if (status === "terminated") {
+            return "Terminated";
+        }
+
+        if (status === "in_progress") {
+            return "In Progress";
+        }
+
+        return status;
     };
 
     const getScoreClass = (score) => {
@@ -56,20 +77,32 @@ export default function InterviewHistory() {
         return "score-low";
     };
 
+    const completedSessions = sessions.filter(
+        (session) => session.status === "completed"
+    );
+
+    const averageScore =
+        sessions.length > 0
+            ? (
+                  sessions.reduce(
+                      (total, session) =>
+                          total + Number(session.final_score || 0),
+                      0
+                  ) / sessions.length
+              ).toFixed(1)
+            : "0.0";
+
+    const latestScore =
+        sessions.length > 0
+            ? Number(sessions[0].final_score || 0).toFixed(1)
+            : "0.0";
+
     if (loading) {
         return (
             <div className="history-page">
-                <div className="history-background">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                </div>
-
                 <div className="history-loading">
-                    <div className="loading-orbit">
-                        <div></div>
-                    </div>
-                    <p>Loading AI sessions...</p>
+                    <div className="loading-spinner"></div>
+                    <p>Loading interview history...</p>
                 </div>
             </div>
         );
@@ -77,287 +110,210 @@ export default function InterviewHistory() {
 
     return (
         <div className="history-page">
-            <div className="history-background">
-                <span></span>
-                <span></span>
-                <span></span>
-            </div>
-
-            <div className="history-content">
-                <header className="history-header">
-                    <div className="history-heading">
-                        <div className="ai-status">
-                            <span></span>
-                            AI SYSTEM ONLINE
-                        </div>
-
-                        <h1>
-                            Interview
-                            <span> History</span>
-                        </h1>
-
+            <div className="history-container">
+                <div className="history-header">
+                    <div>
+                        <p className="history-eyebrow">PERFORMANCE CENTER</p>
+                        <h1>Interview History</h1>
                         <p>
-                            Review your previous AI-powered interview
-                            sessions and track your progress.
+                            Review your previous AI interview sessions and
+                            track your progress.
                         </p>
                     </div>
 
                     <Link
                         to="/interview-setup"
-                        className="new-interview-button"
+                        className="history-new-interview"
                     >
-                        <span>+</span>
                         New Interview
                     </Link>
-                </header>
+                </div>
 
                 {error && (
                     <div className="history-error">
-                        <span>!</span>
                         {error}
                     </div>
                 )}
 
-                {!error && interviews.length === 0 && (
-                    <div className="empty-history">
-                        <div className="empty-icon">AI</div>
-                        <h2>No Interview Sessions</h2>
+                {sessions.length > 0 && (
+                    <div className="history-summary">
+                        <div className="summary-card">
+                            <span className="summary-label">
+                                Total Sessions
+                            </span>
+                            <strong>{sessions.length}</strong>
+                        </div>
+
+                        <div className="summary-card">
+                            <span className="summary-label">
+                                Average Score
+                            </span>
+                            <strong>{averageScore}/10</strong>
+                        </div>
+
+                        <div className="summary-card">
+                            <span className="summary-label">
+                                Latest Score
+                            </span>
+                            <strong>{latestScore}/10</strong>
+                        </div>
+                    </div>
+                )}
+
+                {sessions.length === 0 && !error ? (
+                    <div className="history-empty">
+                        <div className="empty-icon">◈</div>
+                        <h2>No Interview Sessions Yet</h2>
                         <p>
-                            Start your first AI interview and your results
-                            will appear here.
+                            Complete your first AI interview to see your
+                            performance history here.
                         </p>
 
-                        <Link to="/interview-setup">
+                        <Link
+                            to="/interview-setup"
+                            className="empty-action"
+                        >
                             Start Your First Interview
                         </Link>
                     </div>
-                )}
+                ) : (
+                    <div className="session-grid">
+                        {sessions.map((session) => {
+                            const score = Number(
+                                session.final_score || 0
+                            );
 
-                {!error && interviews.length > 0 && (
-                    <>
-                        <div className="history-summary">
-                            <div className="summary-card">
-                                <div className="summary-icon">◉</div>
-                                <div>
-                                    <span>Total Sessions</span>
-                                    <strong>{interviews.length}</strong>
-                                </div>
-                            </div>
+                            const questionCount =
+                                session.interviews?.length || 0;
 
-                            <div className="summary-card">
-                                <div className="summary-icon">✦</div>
-                                <div>
-                                    <span>Average Score</span>
-                                    <strong>
-                                        {(
-                                            interviews.reduce(
-                                                (total, interview) =>
-                                                    total + interview.score,
-                                                0
-                                            ) / interviews.length
-                                        ).toFixed(1)}
-                                        <small>/10</small>
-                                    </strong>
-                                </div>
-                            </div>
+                            const totalQuestions =
+                                session.total_questions || 5;
 
-                            <div className="summary-card">
-                                <div className="summary-icon">↗</div>
-                                <div>
-                                    <span>Latest Session</span>
-                                    <strong>
-                                        {formatDate(
-                                            interviews[0].created_at
-                                        )}
-                                    </strong>
-                                </div>
-                            </div>
-                        </div>
+                            const isCompleted =
+                                session.status === "completed";
 
-                        <div className="session-section">
-                            <div className="section-heading">
-                                <div>
-                                    <span>AI ANALYTICS</span>
-                                    <h2>Your Interview Sessions</h2>
-                                </div>
+                            const isTerminated =
+                                session.status === "terminated";
 
-                                <div className="session-count">
-                                    {interviews.length}{" "}
-                                    {interviews.length === 1
-                                        ? "SESSION"
-                                        : "SESSIONS"}
-                                </div>
-                            </div>
+                            return (
+                                <div
+                                    className="session-card"
+                                    key={session.id}
+                                >
+                                    <div className="session-card-top">
+                                        <div>
+                                            <span className="session-number">
+                                                SESSION #{session.id}
+                                            </span>
 
-                            <div className="session-grid">
-                                {interviews.map((interview, index) => (
-                                    <article
-                                        className="session-card"
-                                        key={interview.id}
-                                        style={{
-                                            animationDelay: `${index * 0.08}s`,
-                                        }}
-                                    >
-                                        <div className="card-glow"></div>
+                                            <h2>
+                                                {session.interview_type}
+                                            </h2>
+                                        </div>
 
-                                        <div className="session-top">
-                                            <div className="session-number">
-                                                <span>SESSION</span>
-                                                <strong>
-                                                    #{String(
-                                                        interview.id
-                                                    ).padStart(2, "0")}
-                                                </strong>
-                                            </div>
+                                        <div
+                                            className={`session-score ${getScoreClass(
+                                                score
+                                            )}`}
+                                        >
+                                            <strong>{score}</strong>
+                                            <span>/10</span>
+                                        </div>
+                                    </div>
 
-                                            <div
-                                                className={`session-score ${getScoreClass(
-                                                    interview.score
-                                                )}`}
+                                    <div className="session-details">
+                                        <div className="detail-item">
+                                            <span>Level</span>
+                                            <strong>
+                                                {session.level}
+                                            </strong>
+                                        </div>
+
+                                        <div className="detail-item">
+                                            <span>Date</span>
+                                            <strong>
+                                                {formatDate(
+                                                    session.created_at
+                                                )}
+                                            </strong>
+                                        </div>
+
+                                        <div className="detail-item">
+                                            <span>Questions</span>
+                                            <strong>
+                                                {questionCount}/
+                                                {totalQuestions}
+                                            </strong>
+                                        </div>
+
+                                        <div className="detail-item">
+                                            <span>Status</span>
+                                            <strong
+                                                className={`session-status status-${session.status}`}
                                             >
+                                                {formatStatus(
+                                                    session.status
+                                                )}
+                                            </strong>
+                                        </div>
+                                    </div>
+
+                                    {isTerminated && (
+                                        <div className="violation-message">
+                                            <span>!</span>
+                                            <div>
                                                 <strong>
-                                                    {interview.score}
+                                                    Integrity Violation
                                                 </strong>
-                                                <span>/10</span>
+                                                <p>
+                                                    This interview was
+                                                    terminated before
+                                                    completion.
+                                                </p>
                                             </div>
                                         </div>
+                                    )}
 
-                                        <div className="session-main">
-                                            <div className="session-type">
-                                                <span className="type-dot"></span>
-                                                {interview.interview_type}
-                                            </div>
-
-                                            <h3>{interview.level}</h3>
-
-                                            <div className="session-meta">
-                                                <span>
-                                                    {formatDate(
-                                                        interview.created_at
-                                                    )}
-                                                </span>
-                                                <span>•</span>
-                                                <span>AI Evaluated</span>
-                                            </div>
-                                        </div>
-
-                                        <div className="session-footer">
+                                    <div className="session-footer">
+                                        {isCompleted ? (
                                             <button
+                                                type="button"
                                                 onClick={() =>
-                                                    setSelectedInterview(
-                                                        interview
+                                                    navigate(
+                                                        `/interview-report/${session.id}`
                                                     )
                                                 }
                                             >
-                                                View Analysis
+                                                View Full Report
                                                 <span>→</span>
                                             </button>
-                                        </div>
-                                    </article>
-                                ))}
-                            </div>
-                        </div>
-                    </>
+                                        ) : isTerminated ? (
+                                            <div className="terminated-label">
+                                                Interview Terminated
+                                            </div>
+                                        ) : (
+                                            <div className="progress-label">
+                                                Interview In Progress
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                )}
+
+                {completedSessions.length > 0 && (
+                    <div className="history-footer">
+                        <p>
+                            Your completed sessions contain detailed
+                            AI-generated performance reports.
+                        </p>
+                    </div>
                 )}
             </div>
-
-            {selectedInterview && (
-                <div
-                    className="analysis-overlay"
-                    onClick={() => setSelectedInterview(null)}
-                >
-                    <div
-                        className="analysis-modal"
-                        onClick={(e) => e.stopPropagation()}
-                    >
-                        <button
-                            className="modal-close"
-                            onClick={() => setSelectedInterview(null)}
-                        >
-                            ×
-                        </button>
-
-                        <div className="modal-header">
-                            <div>
-                                <div className="modal-label">
-                                    AI INTERVIEW ANALYSIS
-                                </div>
-
-                                <h2>
-                                    {selectedInterview.interview_type}
-                                </h2>
-
-                                <p>
-                                    {selectedInterview.level} ·{" "}
-                                    {formatDate(
-                                        selectedInterview.created_at
-                                    )}
-                                </p>
-                            </div>
-
-                            <div
-                                className={`modal-score ${getScoreClass(
-                                    selectedInterview.score
-                                )}`}
-                            >
-                                <strong>{selectedInterview.score}</strong>
-                                <span>/10</span>
-                            </div>
-                        </div>
-
-                        <div className="analysis-question">
-                            <span>INTERVIEW QUESTION</span>
-                            <p>{selectedInterview.question}</p>
-                        </div>
-
-                        <div className="analysis-answer">
-                            <span>YOUR ANSWER</span>
-                            <p>{selectedInterview.answer}</p>
-                        </div>
-
-                        <div className="analysis-grid">
-                            <div className="analysis-box strengths-box">
-                                <div className="analysis-box-title">
-                                    <span>+</span>
-                                    Strengths
-                                </div>
-
-                                <ul>
-                                    {selectedInterview.strengths?.map(
-                                        (strength, index) => (
-                                            <li key={index}>{strength}</li>
-                                        )
-                                    )}
-                                </ul>
-                            </div>
-
-                            <div className="analysis-box weaknesses-box">
-                                <div className="analysis-box-title">
-                                    <span>↗</span>
-                                    Areas to Improve
-                                </div>
-
-                                <ul>
-                                    {selectedInterview.weaknesses?.map(
-                                        (weakness, index) => (
-                                            <li key={index}>{weakness}</li>
-                                        )
-                                    )}
-                                </ul>
-                            </div>
-                        </div>
-
-                        <div className="ai-feedback">
-                            <div className="feedback-label">
-                                <span>✦</span>
-                                AI COACH FEEDBACK
-                            </div>
-
-                            <p>{selectedInterview.feedback}</p>
-                        </div>
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
+
+export default InterviewHistory;
