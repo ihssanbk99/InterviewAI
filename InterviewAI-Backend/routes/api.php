@@ -13,6 +13,7 @@ Route::middleware('auth:sanctum')->group(function () {
 
     Route::post('/interview/start', [InterviewController::class, 'startSession']);
     Route::post('/interview/generate-question', [InterviewController::class, 'generateQuestion']);
+    Route::post('/interview/transcribe', [InterviewController::class, 'transcribeAnswer']);
     Route::post('/interview/submit-answer', [InterviewController::class, 'submitAnswer']);
     Route::post('/interview/violation', [InterviewController::class, 'recordViolation']);
 

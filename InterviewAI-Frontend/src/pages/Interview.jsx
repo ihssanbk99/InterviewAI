@@ -16,9 +16,19 @@ export default function Interview() {
     const [answer, setAnswer] = useState("");
     const [loadingQuestion, setLoadingQuestion] = useState(true);
     const [loading, setLoading] = useState(false);
+    const [transcribing, setTranscribing] = useState(false);
     const [error, setError] = useState("");
     const [violated, setViolated] = useState(false);
 
+    const [isRecording, setIsRecording] = useState(false);
+    const [recordingTime, setRecordingTime] = useState(0);
+    const [audioUrl, setAudioUrl] = useState("");
+    const [audioBlob, setAudioBlob] = useState(null);
+
+    const mediaRecorderRef = useRef(null);
+    const mediaStreamRef = useRef(null);
+    const audioChunksRef = useRef([]);
+    const recordingTimerRef = useRef(null);
     const audioContextRef = useRef(null);
     const alarmIntervalRef = useRef(null);
 
@@ -121,6 +131,212 @@ export default function Interview() {
         }, 6000);
     };
 
+    const stopRecordingStream = () => {
+        if (mediaStreamRef.current) {
+            mediaStreamRef.current
+                .getTracks()
+                .forEach((track) => track.stop());
+
+            mediaStreamRef.current = null;
+        }
+    };
+
+    const startRecording = async () => {
+        if (!navigator.mediaDevices?.getUserMedia) {
+            setError(
+                "Microphone recording is not supported by this browser."
+            );
+            return;
+        }
+
+        try {
+            setError("");
+            setAudioBlob(null);
+
+            if (audioUrl) {
+                URL.revokeObjectURL(audioUrl);
+                setAudioUrl("");
+            }
+
+            const stream =
+                await navigator.mediaDevices.getUserMedia({
+                    audio: true,
+                });
+
+            mediaStreamRef.current = stream;
+            audioChunksRef.current = [];
+
+            const mediaRecorder =
+                new MediaRecorder(stream);
+
+            mediaRecorderRef.current =
+                mediaRecorder;
+
+            mediaRecorder.ondataavailable = (event) => {
+                if (event.data.size > 0) {
+                    audioChunksRef.current.push(
+                        event.data
+                    );
+                }
+            };
+
+            mediaRecorder.onstop = () => {
+                const audioBlob =
+                    new Blob(
+                        audioChunksRef.current,
+                        {
+                            type:
+                                mediaRecorder.mimeType ||
+                                "audio/webm",
+                        }
+                    );
+
+                const url =
+                    URL.createObjectURL(
+                        audioBlob
+                    );
+
+                setAudioBlob(audioBlob);
+                setAudioUrl(url);
+                stopRecordingStream();
+            };
+
+            mediaRecorder.start();
+
+            setIsRecording(true);
+            setRecordingTime(0);
+
+            recordingTimerRef.current =
+                setInterval(() => {
+                    setRecordingTime(
+                        (time) => time + 1
+                    );
+                }, 1000);
+        } catch (err) {
+            if (
+                err.name ===
+                "NotAllowedError"
+            ) {
+                setError(
+                    "Microphone permission was denied. Please allow microphone access and try again."
+                );
+            } else {
+                setError(
+                    "Unable to access your microphone."
+                );
+            }
+        }
+    };
+
+    const stopRecording = () => {
+        if (
+            !mediaRecorderRef.current ||
+            mediaRecorderRef.current.state ===
+                "inactive"
+        ) {
+            return;
+        }
+
+        mediaRecorderRef.current.stop();
+
+        setIsRecording(false);
+
+        if (recordingTimerRef.current) {
+            clearInterval(
+                recordingTimerRef.current
+            );
+
+            recordingTimerRef.current = null;
+        }
+    };
+
+    const transcribeRecording = async () => {
+        if (!audioBlob || !sessionId) {
+            return;
+        }
+
+        try {
+            setTranscribing(true);
+            setError("");
+
+            const token =
+                localStorage.getItem(
+                    "interviewai_token"
+                );
+
+            const formData = new FormData();
+
+            const extension =
+                audioBlob.type.includes("webm")
+                    ? "webm"
+                    : "audio";
+
+            formData.append(
+                "audio",
+                audioBlob,
+                `interview-answer.${extension}`
+            );
+
+            formData.append(
+                "session_id",
+                sessionId
+            );
+
+            const response = await axios.post(
+                `${API_URL}/interview/transcribe`,
+                formData,
+                {
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                    },
+                }
+            );
+
+            const transcription =
+                response.data.data.transcription;
+
+            setAnswer(transcription);
+        } catch (err) {
+            setError(
+                err.response?.data?.message ||
+                    "Unable to transcribe your recording."
+            );
+        } finally {
+            setTranscribing(false);
+        }
+    };
+
+    const clearRecording = () => {
+        if (isRecording) {
+            stopRecording();
+        }
+
+        if (audioUrl) {
+            URL.revokeObjectURL(audioUrl);
+        }
+
+        setAudioUrl("");
+        setAudioBlob(null);
+        setRecordingTime(0);
+        audioChunksRef.current = [];
+    };
+
+    const formatRecordingTime = (seconds) => {
+        const minutes = Math.floor(
+            seconds / 60
+        );
+
+        const remainingSeconds =
+            seconds % 60;
+
+        return `${String(minutes).padStart(
+            2,
+            "0"
+        )}:${String(
+            remainingSeconds
+        ).padStart(2, "0")}`;
+    };
+
     useEffect(() => {
         return () => {
             if (alarmIntervalRef.current) {
@@ -130,6 +346,24 @@ export default function Interview() {
 
                 alarmIntervalRef.current = null;
             }
+
+            if (recordingTimerRef.current) {
+                clearInterval(
+                    recordingTimerRef.current
+                );
+
+                recordingTimerRef.current = null;
+            }
+
+            if (
+                mediaRecorderRef.current &&
+                mediaRecorderRef.current.state !==
+                    "inactive"
+            ) {
+                mediaRecorderRef.current.stop();
+            }
+
+            stopRecordingStream();
 
             if (audioContextRef.current) {
                 audioContextRef.current.close();
@@ -195,6 +429,10 @@ export default function Interview() {
                 return;
             }
 
+            if (isRecording) {
+                stopRecording();
+            }
+
             playAlarmSound();
 
             try {
@@ -234,7 +472,7 @@ export default function Interview() {
                 handleVisibilityChange
             );
         };
-    }, [sessionId, violated]);
+    }, [sessionId, violated, isRecording]);
 
     if (
         !sessionId ||
@@ -389,6 +627,7 @@ export default function Interview() {
             );
 
             setAnswer("");
+            clearRecording();
         } catch (err) {
             setError(
                 err.response?.data?.message ||
@@ -567,9 +806,133 @@ export default function Interview() {
                                         placeholder="Type your answer here..."
                                         rows="9"
                                         disabled={
-                                            loading
+                                            loading ||
+                                            isRecording ||
+                                            transcribing
                                         }
                                     />
+
+                                    <div className="voice-recorder">
+                                        <div className="voice-recorder-info">
+                                            <div
+                                                className={`microphone-icon ${
+                                                    isRecording
+                                                        ? "recording"
+                                                        : ""
+                                                }`}
+                                            >
+                                                <span>●</span>
+                                            </div>
+
+                                            <div>
+                                                <strong>
+                                                    {isRecording
+                                                        ? "Recording your answer"
+                                                        : transcribing
+                                                            ? "Transcribing your answer"
+                                                            : "Voice Answer"}
+                                                </strong>
+
+                                                <p>
+                                                    {isRecording
+                                                        ? "Speak naturally and clearly."
+                                                        : transcribing
+                                                            ? "AI is converting your voice into text."
+                                                            : "Record your answer using your microphone."}
+                                                </p>
+                                            </div>
+                                        </div>
+
+                                        <div className="voice-recorder-actions">
+                                            {isRecording && (
+                                                <div className="recording-time">
+                                                    {formatRecordingTime(
+                                                        recordingTime
+                                                    )}
+                                                </div>
+                                            )}
+
+                                            {!isRecording ? (
+                                                <button
+                                                    type="button"
+                                                    className="record-button"
+                                                    onClick={
+                                                        startRecording
+                                                    }
+                                                    disabled={
+                                                        loading ||
+                                                        transcribing
+                                                    }
+                                                >
+                                                    <span>
+                                                        ●
+                                                    </span>
+                                                    Start Recording
+                                                </button>
+                                            ) : (
+                                                <button
+                                                    type="button"
+                                                    className="stop-recording-button"
+                                                    onClick={
+                                                        stopRecording
+                                                    }
+                                                >
+                                                    <span></span>
+                                                    Stop Recording
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {audioUrl && (
+                                        <div className="recording-preview">
+                                            <div className="recording-preview-header">
+                                                <span>
+                                                    RECORDING READY
+                                                </span>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={
+                                                        clearRecording
+                                                    }
+                                                >
+                                                    Remove
+                                                </button>
+                                            </div>
+
+                                            <audio
+                                                controls
+                                                src={
+                                                    audioUrl
+                                                }
+                                            ></audio>
+
+                                            <button
+                                                type="button"
+                                                className="transcribe-button"
+                                                onClick={
+                                                    transcribeRecording
+                                                }
+                                                disabled={
+                                                    transcribing ||
+                                                    loading
+                                                }
+                                            >
+                                                {transcribing ? (
+                                                    <>
+                                                        <span className="button-loader"></span>
+                                                        Transcribing...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        Transcribe Recording
+                                                        <span>→</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    )}
 
                                     {error && (
                                         <div className="interview-error">
@@ -596,7 +959,9 @@ export default function Interview() {
                                             type="submit"
                                             disabled={
                                                 !answer.trim() ||
-                                                loading
+                                                loading ||
+                                                isRecording ||
+                                                transcribing
                                             }
                                         >
                                             {loading ? (

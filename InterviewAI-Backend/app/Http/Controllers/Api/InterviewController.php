@@ -4,10 +4,12 @@ namespace App\Http\Controllers\Api;
 
 use App\Ai\Agents\InterviewCoach;
 use App\Ai\Agents\InterviewQuestionGenerator;
+use App\Ai\Agents\OverallInterviewFeedback;
 use App\Http\Controllers\Controller;
 use App\Models\Interview;
 use App\Models\InterviewSession;
 use Illuminate\Http\Request;
+use Laravel\Ai\Transcription;
 
 class InterviewController extends Controller
 {
@@ -99,9 +101,66 @@ Return only the interview question through the structured response.
             'data' => [
                 'session_id' => $session->id,
                 'question_number' => $session->current_question,
-                'question' => $result->structured['question'],
+                'question' => $result['question'],
             ],
         ]);
+    }
+
+    public function transcribeAnswer(Request $request)
+    {
+        $validated = $request->validate([
+            'audio' => [
+                'required',
+                'file',
+                'mimes:webm,mp3,wav,ogg,m4a,mp4,mpeg,mpga,flac',
+                'max:25600',
+            ],
+            'session_id' => [
+                'required',
+                'integer',
+                'exists:interview_sessions,id',
+            ],
+        ]);
+
+        $session = InterviewSession::where('id', $validated['session_id'])
+            ->where('user_id', $request->user()->id)
+            ->firstOrFail();
+
+        if (
+            $session->status === 'completed' ||
+            $session->status === 'terminated' ||
+            $session->integrity_status === 'violated'
+        ) {
+            return response()->json([
+                'message' => 'Interview session has already ended.',
+            ], 409);
+        }
+
+        try {
+            $transcript = Transcription::fromUpload(
+                $validated['audio']
+            )->generate();
+
+            $transcription = trim((string) $transcript);
+
+            if ($transcription === '') {
+                return response()->json([
+                    'message' => 'No speech could be detected in the recording.',
+                ], 422);
+            }
+
+            return response()->json([
+                'message' => 'Recording transcribed successfully.',
+                'data' => [
+                    'session_id' => $session->id,
+                    'transcription' => $transcription,
+                ],
+            ]);
+        } catch (\Throwable $exception) {
+            return response()->json([
+                'message' => 'The transcription service is temporarily unavailable. Please try again.',
+            ], 503);
+        }
     }
 
     public function submitAnswer(Request $request)
@@ -175,13 +234,22 @@ Also provide concise strengths, weaknesses, and constructive feedback.
             ], 503);
         }
 
-        $evaluation = $result->structured;
+        $evaluation = [
+            'technical_accuracy' => (int) $result['technical_accuracy'],
+            'relevance' => (int) $result['relevance'],
+            'completeness' => (int) $result['completeness'],
+            'clarity_communication' => (int) $result['clarity_communication'],
+            'experience_level_fit' => (int) $result['experience_level_fit'],
+            'strengths' => $result['strengths'],
+            'weaknesses' => $result['weaknesses'],
+            'feedback' => $result['feedback'],
+        ];
 
-        $technicalAccuracy = (int) $evaluation['technical_accuracy'];
-        $relevance = (int) $evaluation['relevance'];
-        $completeness = (int) $evaluation['completeness'];
-        $clarityCommunication = (int) $evaluation['clarity_communication'];
-        $experienceLevelFit = (int) $evaluation['experience_level_fit'];
+        $technicalAccuracy = $evaluation['technical_accuracy'];
+        $relevance = $evaluation['relevance'];
+        $completeness = $evaluation['completeness'];
+        $clarityCommunication = $evaluation['clarity_communication'];
+        $experienceLevelFit = $evaluation['experience_level_fit'];
 
         $weightedScore =
             ($technicalAccuracy * 0.30) +
@@ -238,24 +306,107 @@ Also provide concise strengths, weaknesses, and constructive feedback.
                 ->take(6)
                 ->toArray();
 
-            $feedbackParts = $interviews
-                ->pluck('feedback')
-                ->filter()
-                ->values()
-                ->toArray();
+            $overallAnalysis = [
+                'performance_summary' => 'Your interview demonstrated a mix of strengths and areas for improvement across the evaluated questions. Review the detailed analysis below to understand your overall performance.',
+                'technical_performance' => 'Your technical performance was evaluated across the complete interview. Review the individual technical criteria to identify recurring patterns.',
+                'communication_performance' => 'Your communication was evaluated based on clarity, structure, relevance, and professionalism across your answers.',
+                'experience_assessment' => "Your answers were evaluated against the expected level for a {$session->level} candidate.",
+                'key_strengths' => $allStrengths,
+                'main_weaknesses' => $allWeaknesses,
+                'areas_to_improve' => $allWeaknesses,
+                'action_plan' => [
+                    'Review the areas identified in the interview feedback.',
+                    'Practice answering technical questions with clear structure and specific examples.',
+                    'Repeat mock interviews to improve consistency and confidence.',
+                ],
+            ];
 
-            $overallFeedback =
-                'Your overall interview performance was based on the quality of your answers across all questions. ' .
-                'Review the individual feedback below to identify patterns in your strengths and areas for improvement.';
+            $overallAgent = new OverallInterviewFeedback();
 
-            if (!empty($feedbackParts)) {
-                $overallFeedback .= ' Key feedback from the interview: ' .
-                    implode(' ', array_slice($feedbackParts, 0, 3));
+            $interviewData = $interviews->map(function ($item, $index) {
+                return [
+                    'question_number' => $index + 1,
+                    'question' => $item->question,
+                    'answer' => $item->answer,
+                    'score' => $item->score,
+                    'technical_accuracy' => $item->technical_accuracy,
+                    'relevance' => $item->relevance,
+                    'completeness' => $item->completeness,
+                    'clarity_communication' => $item->clarity_communication,
+                    'experience_level_fit' => $item->experience_level_fit,
+                    'strengths' => $item->strengths,
+                    'weaknesses' => $item->weaknesses,
+                    'feedback' => $item->feedback,
+                ];
+            })->values()->toArray();
+
+            $overallPrompt = "
+Analyze the candidate's complete {$session->interview_type} interview.
+
+Candidate experience level: {$session->level}
+
+The interview contains {$interviews->count()} questions.
+
+Below is the complete interview data:
+
+" . json_encode($interviewData, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE) . "
+
+Provide a comprehensive overall analysis of the candidate.
+
+Performance Summary:
+Explain the candidate's overall performance across the complete interview. Identify recurring patterns instead of simply repeating individual feedback.
+
+Technical Performance:
+Analyze the candidate's technical knowledge, accuracy, depth, practical understanding, and ability to explain technical concepts across the interview.
+
+Communication Performance:
+Analyze clarity, structure, relevance, professionalism, and how effectively the candidate communicates ideas.
+
+Experience Assessment:
+Assess how the candidate's answers align with the expected {$session->level} experience level. Discuss whether the depth and quality of the answers generally match that level.
+
+Key Strengths:
+Identify the most important strengths demonstrated repeatedly across the interview.
+
+Main Weaknesses:
+Identify recurring weaknesses that affected multiple answers or the overall performance.
+
+Areas to Improve:
+Provide specific areas the candidate should work on to improve future interview performance.
+
+Action Plan:
+Provide practical and actionable steps the candidate can take before the next interview.
+
+Do not calculate a new overall numerical score.
+Do not invent information that is not present in the interview data.
+Do not simply repeat every individual strength or weakness.
+Focus on meaningful patterns across the complete interview.
+";
+
+            try {
+                $overallResult = retry(
+                    3,
+                    fn () => $overallAgent->prompt($overallPrompt),
+                    1500
+                );
+
+                $overallAnalysis = [
+                    'performance_summary' => $overallResult['performance_summary'],
+                    'technical_performance' => $overallResult['technical_performance'],
+                    'communication_performance' => $overallResult['communication_performance'],
+                    'experience_assessment' => $overallResult['experience_assessment'],
+                    'key_strengths' => $overallResult['key_strengths'],
+                    'main_weaknesses' => $overallResult['main_weaknesses'],
+                    'areas_to_improve' => $overallResult['areas_to_improve'],
+                    'action_plan' => $overallResult['action_plan'],
+                ];
+            } catch (\Throwable $exception) {
             }
 
             $session->update([
                 'status' => 'completed',
                 'final_score' => $finalScore,
+                'overall_analysis' => $overallAnalysis,
             ]);
 
             return response()->json([
@@ -280,9 +431,10 @@ Also provide concise strengths, weaknesses, and constructive feedback.
                         'feedback' => $interview->feedback,
                     ],
                     'report' => [
-                        'overall_strengths' => $allStrengths,
-                        'overall_weaknesses' => $allWeaknesses,
-                        'overall_feedback' => $overallFeedback,
+                        'overall_strengths' => $overallAnalysis['key_strengths'],
+                        'overall_weaknesses' => $overallAnalysis['main_weaknesses'],
+                        'overall_feedback' => $overallAnalysis['performance_summary'],
+                        'overall_analysis' => $overallAnalysis,
                     ],
                 ],
             ]);
@@ -339,7 +491,7 @@ Return only the interview question through the structured response.
                     'weaknesses' => $interview->weaknesses,
                     'feedback' => $interview->feedback,
                 ],
-                'next_question' => $questionResult->structured['question'],
+                'next_question' => $questionResult['question'],
             ],
         ]);
     }
@@ -378,20 +530,56 @@ Return only the interview question through the structured response.
             ->take(6)
             ->toArray();
 
-        $feedbackParts = $interviews
-            ->pluck('feedback')
-            ->filter()
-            ->values()
-            ->toArray();
+        $overallAnalysis = $session->overall_analysis;
 
-        $overallFeedback =
-            'Your overall interview performance was based on the quality of your answers across all questions. ' .
-            'Review the individual feedback to identify patterns in your strengths and areas for improvement.';
-
-        if (!empty($feedbackParts)) {
-            $overallFeedback .= ' Key feedback from the interview: ' .
-                implode(' ', array_slice($feedbackParts, 0, 3));
+        if (!is_array($overallAnalysis)) {
+            $overallAnalysis = [
+                'performance_summary' => 'Your overall interview performance was based on the quality of your answers across all questions. Review the individual feedback to identify patterns in your strengths and areas for improvement.',
+                'technical_performance' => 'Review the technical criteria from each answer to identify recurring technical strengths and gaps.',
+                'communication_performance' => 'Review the clarity and communication criteria from each answer to identify recurring communication patterns.',
+                'experience_assessment' => "Your answers were evaluated against the expected level for a {$session->level} candidate.",
+                'key_strengths' => $allStrengths,
+                'main_weaknesses' => $allWeaknesses,
+                'areas_to_improve' => $allWeaknesses,
+                'action_plan' => [
+                    'Review the detailed feedback from each interview question.',
+                    'Practice explaining technical concepts with clear structure and examples.',
+                    'Repeat mock interviews to improve consistency.',
+                ],
+            ];
         }
+
+        $criteriaAverages = [
+            'technical_accuracy' => round(
+                (float) $interviews->avg('technical_accuracy'),
+                2
+            ),
+            'relevance' => round(
+                (float) $interviews->avg('relevance'),
+                2
+            ),
+            'completeness' => round(
+                (float) $interviews->avg('completeness'),
+                2
+            ),
+            'clarity_communication' => round(
+                (float) $interviews->avg('clarity_communication'),
+                2
+            ),
+            'experience_level_fit' => round(
+                (float) $interviews->avg('experience_level_fit'),
+                2
+            ),
+        ];
+
+        $questionScores = $interviews->values()->map(
+            function ($interview, $index) {
+                return [
+                    'question' => 'Q' . ($index + 1),
+                    'score' => (float) $interview->score,
+                ];
+            }
+        )->toArray();
 
         return response()->json([
             'message' => 'Interview report loaded successfully',
@@ -403,9 +591,14 @@ Return only the interview question through the structured response.
                 'integrity_status' => $session->integrity_status,
                 'total_questions' => $session->total_questions,
                 'final_score' => (float) $session->final_score,
-                'overall_strengths' => $allStrengths,
-                'overall_weaknesses' => $allWeaknesses,
-                'overall_feedback' => $overallFeedback,
+                'overall_strengths' => $overallAnalysis['key_strengths'] ?? $allStrengths,
+                'overall_weaknesses' => $overallAnalysis['main_weaknesses'] ?? $allWeaknesses,
+                'overall_feedback' => $overallAnalysis['performance_summary'] ?? '',
+                'overall_analysis' => $overallAnalysis,
+                'chart_data' => [
+                    'criteria_averages' => $criteriaAverages,
+                    'question_scores' => $questionScores,
+                ],
                 'interviews' => $interviews,
             ],
         ]);

@@ -1,9 +1,7 @@
 .interview-page {
     width: 100%;
-    height: 100vh;
-    height: 100svh;
-    min-height: 0;
-    overflow: hidden;
+    min-height: 100vh;
+    min-height: 100svh;
     position: relative;
     background:
         radial-gradient(circle at 50% 35%, rgba(73, 105, 255, 0.12), transparent 30%),
@@ -12,6 +10,8 @@
         #050816;
     color: #ffffff;
     box-sizing: border-box;
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 .interview-page *,
@@ -88,10 +88,10 @@
     position: relative;
     z-index: 2;
     width: min(1180px, 100%);
-    height: 100%;
-    min-height: 0;
+    min-height: 100vh;
+    min-height: 100svh;
     margin: 0 auto;
-    padding: 22px 26px 18px;
+    padding: 22px 26px 30px;
     display: flex;
     flex-direction: column;
 }
@@ -225,16 +225,17 @@
 }
 
 .interview-main {
-    flex: 1 1 auto;
+    flex: 1 0 auto;
     min-height: 0;
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px 0;
 }
 
 .question-card {
     width: min(930px, 100%);
-    max-height: 100%;
+    max-height: none;
     padding: 26px 30px 22px;
     border: 1px solid rgba(119, 140, 207, 0.16);
     border-radius: 20px;
@@ -367,6 +368,173 @@
 .question-card textarea:disabled {
     opacity: 0.55;
     cursor: not-allowed;
+}
+
+.voice-recorder {
+    margin-top: 10px;
+    padding: 11px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 15px;
+    border: 1px solid rgba(113, 133, 193, 0.12);
+    border-radius: 11px;
+    background: rgba(255, 255, 255, 0.018);
+}
+
+.voice-recorder-info {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-width: 0;
+}
+
+.microphone-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(105, 130, 255, 0.2);
+    border-radius: 9px;
+    background: rgba(91, 116, 255, 0.08);
+    color: #8198ff;
+}
+
+.microphone-icon span {
+    font-size: 15px;
+    line-height: 1;
+}
+
+.microphone-icon.recording {
+    border-color: rgba(255, 83, 111, 0.35);
+    background: rgba(255, 70, 100, 0.08);
+    color: #ff647f;
+    animation: microphone-pulse 1.2s ease-in-out infinite;
+}
+
+.voice-recorder-info strong {
+    display: block;
+    color: #8995b2;
+    font-size: 9px;
+    font-weight: 800;
+}
+
+.voice-recorder-info p {
+    margin: 3px 0 0;
+    color: #4f5b76;
+    font-size: 8px;
+}
+
+.voice-recorder-actions {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    flex-shrink: 0;
+}
+
+.recording-time {
+    color: #ff6b83;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 1px;
+    min-width: 39px;
+}
+
+.record-button,
+.stop-recording-button {
+    height: 31px;
+    padding: 0 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 7px;
+    border-radius: 8px;
+    font-size: 8px;
+    font-weight: 800;
+    cursor: pointer;
+    transition: 0.2s ease;
+}
+
+.record-button {
+    border: 1px solid rgba(104, 131, 255, 0.2);
+    background: rgba(91, 116, 255, 0.09);
+    color: #8ea1ff;
+}
+
+.record-button:hover:not(:disabled) {
+    border-color: rgba(104, 131, 255, 0.4);
+    background: rgba(91, 116, 255, 0.15);
+}
+
+.record-button > span {
+    color: #ff607b;
+    font-size: 10px;
+}
+
+.record-button:disabled {
+    opacity: 0.35;
+    cursor: not-allowed;
+}
+
+.stop-recording-button {
+    border: 1px solid rgba(255, 82, 108, 0.25);
+    background: rgba(255, 70, 95, 0.08);
+    color: #ff7890;
+}
+
+.stop-recording-button:hover {
+    border-color: rgba(255, 82, 108, 0.45);
+    background: rgba(255, 70, 95, 0.13);
+}
+
+.stop-recording-button > span {
+    width: 7px;
+    height: 7px;
+    border-radius: 2px;
+    background: #ff607b;
+    box-shadow: 0 0 9px rgba(255, 96, 123, 0.7);
+}
+
+.recording-preview {
+    margin-top: 8px;
+    padding: 9px 11px;
+    border: 1px solid rgba(85, 230, 165, 0.13);
+    border-radius: 9px;
+    background: rgba(85, 230, 165, 0.025);
+}
+
+.recording-preview-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 6px;
+}
+
+.recording-preview-header span {
+    color: #5bdba4;
+    font-size: 7px;
+    font-weight: 900;
+    letter-spacing: 1.4px;
+}
+
+.recording-preview-header button {
+    border: 0;
+    background: transparent;
+    color: #65728e;
+    font-size: 7px;
+    cursor: pointer;
+}
+
+.recording-preview-header button:hover {
+    color: #ff7d92;
+}
+
+.recording-preview audio {
+    width: 100%;
+    height: 30px;
+    display: block;
 }
 
 .answer-footer {
@@ -671,6 +839,19 @@
     }
 }
 
+@keyframes microphone-pulse {
+    0%,
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 0 rgba(255, 80, 105, 0);
+    }
+
+    50% {
+        transform: scale(1.06);
+        box-shadow: 0 0 18px rgba(255, 80, 105, 0.22);
+    }
+}
+
 @keyframes warning-pulse {
     0%,
     100% {
@@ -701,38 +882,9 @@
     }
 }
 
-@media (max-height: 760px) {
-    .interview-content {
-        padding-top: 14px;
-        padding-bottom: 12px;
-    }
-
-    .interview-progress {
-        margin-top: 14px;
-    }
-
-    .question-card {
-        padding: 20px 24px 17px;
-    }
-
-    .question-card h2 {
-        margin: 15px 0 16px;
-        font-size: 21px;
-    }
-
-    .question-card textarea {
-        height: 120px;
-        min-height: 100px;
-    }
-
-    .question-loading {
-        min-height: 210px;
-    }
-}
-
 @media (max-width: 760px) {
     .interview-content {
-        padding: 16px 14px 12px;
+        padding: 16px 14px 30px;
     }
 
     .interview-progress {
@@ -757,17 +909,30 @@
     .question-card h2 {
         font-size: 20px;
     }
+
+    .voice-recorder {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+
+    .voice-recorder-actions {
+        width: 100%;
+        justify-content: flex-end;
+    }
 }
 
 @media (max-width: 560px) {
     .interview-page {
-        height: 100vh;
-        height: 100svh;
-        overflow: hidden;
+        min-height: 100vh;
+        min-height: 100svh;
+        overflow-x: hidden;
+        overflow-y: auto;
     }
 
     .interview-content {
-        padding: 10px;
+        min-height: 100vh;
+        min-height: 100svh;
+        padding: 10px 10px 25px;
     }
 
     .interview-header h1 {
@@ -802,6 +967,11 @@
         font-size: 8px;
     }
 
+    .interview-main {
+        padding: 15px 0 10px;
+        align-items: flex-start;
+    }
+
     .question-card {
         padding: 15px 13px 12px;
         border-radius: 15px;
@@ -829,6 +999,48 @@
         height: 100px;
         min-height: 80px;
         max-height: 115px;
+    }
+
+    .voice-recorder {
+        margin-top: 7px;
+        padding: 8px;
+        gap: 8px;
+    }
+
+    .microphone-icon {
+        width: 29px;
+        height: 29px;
+    }
+
+    .voice-recorder-info strong {
+        font-size: 8px;
+    }
+
+    .voice-recorder-info p {
+        font-size: 7px;
+    }
+
+    .voice-recorder-actions {
+        gap: 6px;
+    }
+
+    .record-button,
+    .stop-recording-button {
+        height: 29px;
+        padding: 0 9px;
+        font-size: 7px;
+    }
+
+    .recording-time {
+        font-size: 8px;
+    }
+
+    .recording-preview {
+        padding: 7px 8px;
+    }
+
+    .recording-preview audio {
+        height: 27px;
     }
 
     .answer-footer {
@@ -892,7 +1104,7 @@
 
 @media (max-width: 380px) {
     .interview-content {
-        padding: 7px;
+        padding: 7px 7px 22px;
     }
 
     .interview-header h1 {
@@ -931,5 +1143,18 @@
     .answer-footer button {
         width: 100%;
         min-width: 0;
+    }
+
+    .voice-recorder-info {
+        width: 100%;
+    }
+
+    .voice-recorder-actions {
+        justify-content: space-between;
+    }
+
+    .record-button,
+    .stop-recording-button {
+        flex: 1;
     }
 }

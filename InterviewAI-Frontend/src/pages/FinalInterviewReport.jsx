@@ -28,6 +28,44 @@ const criteriaLabels = [
     },
 ];
 
+const getScoreColor = (score) => {
+    if (score >= 8) {
+        return "#35d07f";
+    }
+
+    if (score >= 6) {
+        return "#b8d94b";
+    }
+
+    if (score >= 4) {
+        return "#f2b84b";
+    }
+
+    return "#ef5b67";
+};
+
+const getSafeScore = (value) => {
+    const score = Number(value ?? 0);
+
+    if (Number.isNaN(score)) {
+        return 0;
+    }
+
+    return Math.min(10, Math.max(0, score));
+};
+
+const calculateAverage = (interviews, key) => {
+    if (!interviews.length) {
+        return 0;
+    }
+
+    const total = interviews.reduce((sum, interview) => {
+        return sum + getSafeScore(interview[key]);
+    }, 0);
+
+    return Number((total / interviews.length).toFixed(1));
+};
+
 export default function FinalInterviewReport() {
     const { sessionId } = useParams();
     const navigate = useNavigate();
@@ -53,9 +91,7 @@ export default function FinalInterviewReport() {
                     }
                 );
 
-                setReport(
-                    response.data.data
-                );
+                setReport(response.data.data);
             } catch (err) {
                 setError(
                     err.response?.data?.message ||
@@ -119,6 +155,33 @@ export default function FinalInterviewReport() {
             </div>
         );
     }
+
+    const overallAnalysis =
+        report.overall_analysis || {};
+
+    const interviews =
+        report.interviews || [];
+
+    const criteriaAverages =
+        criteriaLabels.map((criterion) => ({
+            ...criterion,
+            score: calculateAverage(
+                interviews,
+                criterion.key
+            ),
+        }));
+
+    const averageCriteriaScore =
+        criteriaAverages.length
+            ? (
+                  criteriaAverages.reduce(
+                      (sum, criterion) =>
+                          sum + criterion.score,
+                      0
+                  ) /
+                  criteriaAverages.length
+              ).toFixed(1)
+            : "0.0";
 
     return (
         <div className="final-report-page">
@@ -205,8 +268,7 @@ export default function FinalInterviewReport() {
 
                             <strong>
                                 {
-                                    report.interviews
-                                        .length
+                                    interviews.length
                                 }{" "}
                                 /{" "}
                                 {
@@ -236,7 +298,7 @@ export default function FinalInterviewReport() {
                     </div>
 
                     <div className="question-analysis-list">
-                        {report.interviews.map(
+                        {interviews.map(
                             (
                                 interview,
                                 index
@@ -318,11 +380,11 @@ export default function FinalInterviewReport() {
                                                     criterion
                                                 ) => {
                                                     const value =
-                                                        Number(
+                                                        getSafeScore(
                                                             interview[
                                                                 criterion
                                                                     .key
-                                                        ] ?? 0
+                                                            ]
                                                         );
 
                                                     return (
@@ -353,6 +415,10 @@ export default function FinalInterviewReport() {
                                                                 <span
                                                                     style={{
                                                                         width: `${value * 10}%`,
+                                                                        backgroundColor:
+                                                                            getScoreColor(
+                                                                                value
+                                                                            ),
                                                                     }}
                                                                 ></span>
                                                             </div>
@@ -452,14 +518,27 @@ export default function FinalInterviewReport() {
 
                         <div>
                             <h2>
-                                Overall Performance
+                                Advanced AI Analysis
                             </h2>
 
                             <p>
-                                AI analysis across
+                                Gemini analysis across
                                 the complete interview
                             </p>
                         </div>
+                    </div>
+
+                    <div className="overall-feedback">
+                        <div className="overall-feedback-label">
+                            PERFORMANCE SUMMARY
+                        </div>
+
+                        <p>
+                            {
+                                overallAnalysis.performance_summary ||
+                                report.overall_feedback
+                            }
+                        </p>
                     </div>
 
                     <div className="overall-grid">
@@ -470,12 +549,16 @@ export default function FinalInterviewReport() {
                                 </span>
 
                                 <h3>
-                                    Overall Strengths
+                                    Key Strengths
                                 </h3>
                             </div>
 
                             <ul>
-                                {report.overall_strengths?.map(
+                                {(
+                                    overallAnalysis.key_strengths ||
+                                    report.overall_strengths ||
+                                    []
+                                ).map(
                                     (
                                         strength,
                                         index
@@ -501,12 +584,16 @@ export default function FinalInterviewReport() {
                                 </span>
 
                                 <h3>
-                                    Overall Weaknesses
+                                    Main Weaknesses
                                 </h3>
                             </div>
 
                             <ul>
-                                {report.overall_weaknesses?.map(
+                                {(
+                                    overallAnalysis.main_weaknesses ||
+                                    report.overall_weaknesses ||
+                                    []
+                                ).map(
                                     (
                                         weakness,
                                         index
@@ -526,16 +613,286 @@ export default function FinalInterviewReport() {
                         </div>
                     </div>
 
-                    <div className="overall-feedback">
-                        <div className="overall-feedback-label">
-                            FINAL AI FEEDBACK
+                    <div className="overall-grid">
+                        <div className="overall-card">
+                            <div className="overall-card-title">
+                                <span>
+                                    AI
+                                </span>
+
+                                <h3>
+                                    Technical Performance
+                                </h3>
+                            </div>
+
+                            <p>
+                                {
+                                    overallAnalysis.technical_performance ||
+                                    "Technical performance analysis is not available."
+                                }
+                            </p>
                         </div>
 
-                        <p>
-                            {
-                                report.overall_feedback
-                            }
-                        </p>
+                        <div className="overall-card">
+                            <div className="overall-card-title">
+                                <span>
+                                    AI
+                                </span>
+
+                                <h3>
+                                    Communication Performance
+                                </h3>
+                            </div>
+
+                            <p>
+                                {
+                                    overallAnalysis.communication_performance ||
+                                    "Communication performance analysis is not available."
+                                }
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="overall-grid">
+                        <div className="overall-card">
+                            <div className="overall-card-title">
+                                <span>
+                                    LV
+                                </span>
+
+                                <h3>
+                                    Experience Assessment
+                                </h3>
+                            </div>
+
+                            <p>
+                                {
+                                    overallAnalysis.experience_assessment ||
+                                    "Experience-level assessment is not available."
+                                }
+                            </p>
+                        </div>
+
+                        <div className="overall-card">
+                            <div className="overall-card-title">
+                                <span>
+                                    ↑
+                                </span>
+
+                                <h3>
+                                    Areas to Improve
+                                </h3>
+                            </div>
+
+                            <ul>
+                                {(
+                                    overallAnalysis.areas_to_improve ||
+                                    []
+                                ).map(
+                                    (
+                                        area,
+                                        index
+                                    ) => (
+                                        <li
+                                            key={
+                                                index
+                                            }
+                                        >
+                                            {
+                                                area
+                                            }
+                                        </li>
+                                    )
+                                )}
+                            </ul>
+                        </div>
+                    </div>
+
+                    <div className="overall-feedback">
+                        <div className="overall-feedback-label">
+                            PERSONALIZED ACTION PLAN
+                        </div>
+
+                        <ul>
+                            {(
+                                overallAnalysis.action_plan ||
+                                []
+                            ).map(
+                                (
+                                    action,
+                                    index
+                                ) => (
+                                    <li
+                                        key={
+                                            index
+                                        }
+                                    >
+                                        {action}
+                                    </li>
+                                )
+                            )}
+                        </ul>
+                    </div>
+                </section>
+
+                <section className="report-section charts-section">
+                    <div className="section-heading">
+                        <span>
+                            03
+                        </span>
+
+                        <div>
+                            <h2>
+                                Performance Breakdown
+                            </h2>
+
+                            <p>
+                                Visual breakdown of your
+                                interview performance
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="charts-grid">
+                        <div className="chart-card">
+                            <div className="chart-card-header">
+                                <div>
+                                    <span>
+                                        CRITERIA PERFORMANCE
+                                    </span>
+
+                                    <h3>
+                                        Interview Skill Profile
+                                    </h3>
+                                </div>
+
+                                <div className="chart-score">
+                                    {
+                                        averageCriteriaScore
+                                    }
+                                    <small>
+                                        /10
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div className="energy-bars">
+                                {criteriaAverages.map(
+                                    (criterion) => (
+                                        <div
+                                            className="energy-bar-item"
+                                            key={
+                                                criterion.key
+                                            }
+                                        >
+                                            <div className="energy-bar-header">
+                                                <span>
+                                                    {
+                                                        criterion.label
+                                                    }
+                                                </span>
+
+                                                <strong>
+                                                    {
+                                                        criterion.score
+                                                    }
+                                                    <small>
+                                                        /10
+                                                    </small>
+                                                </strong>
+                                            </div>
+
+                                            <div className="energy-bar-track">
+                                                <span
+                                                    style={{
+                                                        width: `${criterion.score * 10}%`,
+                                                        backgroundColor:
+                                                            getScoreColor(
+                                                                criterion.score
+                                                            ),
+                                                    }}
+                                                ></span>
+                                            </div>
+                                        </div>
+                                    )
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="chart-card">
+                            <div className="chart-card-header">
+                                <div>
+                                    <span>
+                                        QUESTION SCORES
+                                    </span>
+
+                                    <h3>
+                                        Performance by Question
+                                    </h3>
+                                </div>
+
+                                <div className="chart-score">
+                                    {Number(
+                                        report.final_score
+                                    ).toFixed(1)}
+                                    <small>
+                                        /10
+                                    </small>
+                                </div>
+                            </div>
+
+                            <div className="energy-bars question-bars">
+                                {interviews.map(
+                                    (
+                                        interview,
+                                        index
+                                    ) => {
+                                        const score =
+                                            getSafeScore(
+                                                interview.score
+                                            );
+
+                                        return (
+                                            <div
+                                                className="energy-bar-item"
+                                                key={
+                                                    interview.id
+                                                }
+                                            >
+                                                <div className="energy-bar-header">
+                                                    <span>
+                                                        Q
+                                                        {index +
+                                                            1}
+                                                    </span>
+
+                                                    <strong>
+                                                        {score.toFixed(
+                                                            1
+                                                        )}
+                                                        <small>
+                                                            /10
+                                                        </small>
+                                                    </strong>
+                                                </div>
+
+                                                <div className="energy-bar-track">
+                                                    <span
+                                                        style={{
+                                                            width: `${score * 10}%`,
+                                                            backgroundColor:
+                                                                getScoreColor(
+                                                                    score
+                                                                ),
+                                                        }}
+                                                    ></span>
+                                                </div>
+                                            </div>
+                                        );
+                                    }
+                                )}
+                            </div>
+                        </div>
                     </div>
                 </section>
 

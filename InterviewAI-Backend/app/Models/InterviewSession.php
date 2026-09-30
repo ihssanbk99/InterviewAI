@@ -19,6 +19,7 @@ class InterviewSession extends Model
         'integrity_status',
         'violation_reason',
         'final_score',
+        'overall_analysis',
         'current_question',
         'total_questions',
     ];
@@ -29,6 +30,7 @@ class InterviewSession extends Model
             'current_question' => 'integer',
             'total_questions' => 'integer',
             'final_score' => 'decimal:2',
+            'overall_analysis' => 'array',
         ];
     }
 
